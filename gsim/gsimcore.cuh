@@ -182,6 +182,7 @@ public:
 #endif
 private:
 	__device__ bool iterContinue(iterInfo &info) const;
+	template<class dataUnion> __device__ void setSMem(iterInfo &info) const;
 	__device__ void calcPtrAndBoarder(iterInfo &info) const;
 };
 
@@ -379,10 +380,8 @@ public:
 		int gSize = GRID_SIZE(numElem);
 		agentPoolUtil::stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray, model);
 		agentPoolUtil::swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray);
-		//stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize>>>(numElem, numStepped, model);
 		return numElem;
 	}
-		/*host func: sort idxArray based on delMark*/
 };
 
 //GWorld
@@ -520,24 +519,14 @@ __device__ void GWorld::calcPtrAndBoarder(iterInfo &info) const {
 }
 template<class dataUnion> __device__ dataUnion *GWorld::nextAgentDataFromSharedMem(iterInfo &info) const {
 	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
-	//dataUnion *unionArray = (dataUnion*)smem;
+
 	const int tid = threadIdx.x;
 	const int lane = tid & 31;
 
 	if (!iterContinue(info))
 		return NULL;
 
-	if (info.ptrInSmem == 32)
-		info.ptrInSmem = 0;
-
-	if (info.ptrInSmem == 0) {
-		dataUnion &elem = unionArray[tid];
-		int agPtr = info.ptrInWorld + lane;
-		if (agPtr < info.boarder && agPtr >=0) {
-			GAgent *ag = this->obtainAgent(agPtr);
-			elem.putDataInSmem(ag);
-		} 
-	}
+	setSMem<dataUnion>(info);
 
 	dataUnion *elem = &unionArray[tid - lane + info.ptrInSmem];
 	info.ptrInSmem++;
@@ -556,29 +545,10 @@ __device__ GAgentData_t *GWorld::nextAgentData(iterInfo &info) const
 }
 template<class dataUnion> __device__ GAgent *GWorld::nextAgent(iterInfo &info) const
 {
-	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
-
 	if (!iterContinue(info))
 		return NULL;
 
-	int tid = threadIdx.x;
-	int lane = tid & 31;
-
-	if (info.ptrInSmem == 32)
-		info.ptrInSmem = 0;
-
-	if (info.ptrInSmem == 0) {
-		dataUnion &elem = unionArray[tid];
-		int agPtr = info.ptrInWorld + lane;
-		if (agPtr < info.boarder && agPtr >=0) {
-			GAgent *ag = this->obtainAgent(agPtr);
-			elem.putDataInSmem(ag);
-			//ag->setDataInSmem(&elem);
-			//*(dataUnion*)&elem = *(dataUnion*)ag->getData();
-			
-			//ag->dataInSmem = &elem; !!! need to taken care of !!!
-		} 
-	}
+	setSMem<dataUnion>(info);
 
 	GAgent *ag = this->obtainAgent(info.ptrInWorld);
 	info.ptrInWorld++;
@@ -606,6 +576,25 @@ __device__ bool GWorld::iterContinue(iterInfo &info) const
 		this->calcPtrAndBoarder(info);
 	}
 	return true;
+}
+template<class dataUnion> __device__ void GWorld::setSMem(iterInfo &info) const
+{
+	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
+
+	int tid = threadIdx.x;
+	int lane = tid & 31;
+
+	if (info.ptrInSmem == 32)
+		info.ptrInSmem = 0;
+
+	if (info.ptrInSmem == 0) {
+		dataUnion &elem = unionArray[tid];
+		int agPtr = info.ptrInWorld + lane;
+		if (agPtr < info.boarder && agPtr >=0) {
+			GAgent *ag = this->obtainAgent(agPtr);
+			elem.putDataInSmem(ag);
+		} 
+	}
 }
 #ifdef GWORLD_3D
 __device__ float GWorld::stz(const float z) const{
@@ -639,7 +628,6 @@ __global__ void generateHash(int *hash, GAgent **agentPtrArray, FLOATn *pos, int
 		FLOATn myLoc = ag->data->loc;
 		pos[idx] = myLoc;
 	}
-	//printf("id: %d, hash: %d, neiIdx: %d\n", idx, hash[idx], c2d->neighborIdx[idx]);
 }
 __global__ void generateCellIdx(int *hash, GWorld *c2d, int numAgent)
 {

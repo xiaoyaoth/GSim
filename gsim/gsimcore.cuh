@@ -300,7 +300,7 @@ public:
 		bool del = atomicCAS(&this->delMark[agentSlot], false, true);
 		if (del == false) 
 			atomicInc(&decCount, numElem);
-		
+
 		this->modified = true;
 	}
 	__host__ void alloc(int nElem, int nElemMax){
@@ -329,29 +329,29 @@ public:
 		this->decCount = 0;
 		bool poolModifiedLocal = this->modified;
 		this->modified = false;
-		
+
 		//if (poolModifiedLocal && this->numElem > 0) {
-			int gSize = GRID_SIZE(this->numElemMax);
-			agentPoolUtil::cleanupDevice<<<gSize, BLOCK_SIZE>>>(pDev);
-			agentPoolUtil::genHash<<<gSize, BLOCK_SIZE>>>(pDev, hash);
+		int gSize = GRID_SIZE(this->numElemMax);
+		//agentPoolUtil::cleanupDevice<<<gSize, BLOCK_SIZE>>>(pDev);
+		agentPoolUtil::genHash<<<gSize, BLOCK_SIZE>>>(pDev, hash);
 
-			int *dataIdxArrayLocal = this->dataIdxArray;
-			int *delMarkLocal = this->delMark;
-			void **agentPtrArrayLocal = (void**)this->agentPtrArray;
+		int *dataIdxArrayLocal = this->dataIdxArray;
+		int *delMarkLocal = this->delMark;
+		void **agentPtrArrayLocal = (void**)this->agentPtrArray;
 
-			tdp_int thrustDelMark = thrust::device_pointer_cast(delMarkLocal);
-			tdp_voidStar thrustAgentPtrArray = thrust::device_pointer_cast(agentPtrArrayLocal);
-			tdp_int thrustDataIdxArray = thrust::device_pointer_cast(dataIdxArrayLocal);
-			tdp_int thrustHash = thrust::device_pointer_cast(hash);
+		tdp_int thrustDelMark = thrust::device_pointer_cast(delMarkLocal);
+		tdp_voidStar thrustAgentPtrArray = thrust::device_pointer_cast(agentPtrArrayLocal);
+		tdp_int thrustDataIdxArray = thrust::device_pointer_cast(dataIdxArrayLocal);
+		tdp_int thrustHash = thrust::device_pointer_cast(hash);
 
-			thrust::tuple<tdp_voidStar, tdp_int> val = thrust::make_tuple(thrustAgentPtrArray, thrustDataIdxArray);
-			thrust::tuple<tdp_int, tdp_int> key = thrust::make_tuple(thrustDelMark, thrustHash);
-			thrust::zip_iterator<thrust::tuple<tdp_voidStar, tdp_int>> valFirst = thrust::make_zip_iterator(val);
-			thrust::zip_iterator<thrust::tuple<tdp_int, tdp_int>> keyFirst = thrust::make_zip_iterator(key);
-			thrust::sort_by_key(keyFirst, keyFirst + this->numElemMax, valFirst);
+		thrust::tuple<tdp_voidStar, tdp_int> val = thrust::make_tuple(thrustAgentPtrArray, thrustDataIdxArray);
+		thrust::tuple<tdp_int, tdp_int> key = thrust::make_tuple(thrustDelMark, thrustHash);
+		thrust::zip_iterator<thrust::tuple<tdp_voidStar, tdp_int>> valFirst = thrust::make_zip_iterator(val);
+		thrust::zip_iterator<thrust::tuple<tdp_int, tdp_int>> keyFirst = thrust::make_zip_iterator(key);
+		thrust::sort_by_key(keyFirst, keyFirst + this->numElemMax, valFirst);
 
-			this->numElem = this->numElemMax - thrust::reduce(thrustDelMark, thrustDelMark + this->numElemMax);
-			cudaMemcpy(pDev, this, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyHostToDevice);
+		this->numElem = this->numElemMax - thrust::reduce(thrustDelMark, thrustDelMark + this->numElemMax);
+		cudaMemcpy(pDev, this, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyHostToDevice);
 		//}
 
 		return poolModifiedLocal; 
@@ -482,7 +482,7 @@ __device__ void GWorld::neighborQueryInit(const FLOATn &agLoc, float range, iter
 	info.cellHead.z = sharedMin(smem, tid, idx, agLoc.z, range, modelDevParams.CLEN_Z);
 	info.cellTail.z = sharedMin(smem, tid, idx, agLoc.z, range, modelDevParams.CLEN_Z);
 #endif
-	
+
 	info.cellCur.x = info.cellHead.x;
 	info.cellCur.y = info.cellHead.y;
 #ifdef GWORLD_3D
@@ -860,7 +860,7 @@ void errorHandler(GWorld *world_h)
 	cudaMemcpy(hash_h, hash, modelHostParams.AGENT_NO * sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(cidx_h, world_h->cellIdxStart, modelHostParams.CELL_NO * sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(pos_h, pos, sizeof(FLOATn)*modelHostParams.AGENT_NO, cudaMemcpyDeviceToHost);
-	
+
 	std::fstream fout;
 	char *outfname = new char[30];
 	sprintf(outfname, "out_genNeighbor_neighborIdx.txt");

@@ -140,8 +140,11 @@ __global__ void visUtil::paint(uchar4 *devPtr, const GWorld *world, int width, i
 	if (idx < modelDevParams.AGENT_NO){
 		GAgent *ag = world->allAgents[idx];
 		FLOATn myLoc = ag->data->loc;
-		int canvasX = (int)(myLoc.x * width / world->width) * dotScale;
-		int canvasY = (int)(myLoc.y * height / world->height) * dotScale;
+		int canvasX = (int)(myLoc.x) * width * dotScale; 
+		canvasX /= (int)world->width+1;
+		int canvasY = (int)(myLoc.y) * height * dotScale;
+		canvasY /= (int)world->height+1;
+
 		int dotDimX = width * dotScale / world->width;
 		int dotDimY = height * dotScale / world->height;
 

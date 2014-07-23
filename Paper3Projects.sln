@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SocialForce", "SocialForce\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Flocking", "Flocking\Flocking.vcxproj", "{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BenchmarkAddingDeleting", "BenchmarkAddingDeleting\BenchmarkAddingDeleting.vcxproj", "{FD974A83-B212-49C2-B59E-76E9ADD40F47}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -49,6 +51,14 @@ Global
 		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|Win32.Build.0 = Release|Win32
 		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|x64.ActiveCfg = Release|x64
 		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|x64.Build.0 = Release|x64
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Debug|Win32.Build.0 = Debug|Win32
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Debug|x64.ActiveCfg = Debug|x64
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Debug|x64.Build.0 = Debug|x64
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Release|Win32.ActiveCfg = Release|Win32
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Release|Win32.Build.0 = Release|Win32
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Release|x64.ActiveCfg = Release|x64
+		{FD974A83-B212-49C2-B59E-76E9ADD40F47}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

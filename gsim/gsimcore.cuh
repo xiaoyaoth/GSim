@@ -76,16 +76,23 @@ namespace agentPoolUtil{
 			}
 		}
 	}
-	template<class Agent> 
+	template<class Agent>
 	__global__ void stepKernel(int numElem, Agent **agentPtrArray, GModel *model)
 	{
 		int idx = threadIdx.x + blockIdx.x * blockDim.x; 
 		if (idx < numElem) {
-			//Agent *ag = model->scheduler->agentPtrArray[idx + numStepped];
 			Agent *ag = agentPtrArray[idx];
 			ag->ptrInPool = idx;
 			ag->step(model);
-			ag->swapDataAndCopy();
+		}
+	}
+	template<class Agent>
+	__global__ void swapKernel(int numElem, Agent **agentPtrArray)
+	{
+		int idx = threadIdx.x + blockIdx.x * blockDim.x;
+		if (idx < numElem) {
+			Agent *ag = agentPtrArray[idx];
+			ag->swapDataAndCopy(); // swapDataAndCopy should be inside a different kernel?
 		}
 	}
 };
@@ -371,6 +378,7 @@ public:
 	{
 		int gSize = GRID_SIZE(numElem);
 		agentPoolUtil::stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray, model);
+		agentPoolUtil::swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray);
 		//stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize>>>(numElem, numStepped, model);
 		return numElem;
 	}
@@ -852,6 +860,7 @@ template<class SharedMemoryData> void init(char *configFile)
 	colorHost.red	=	make_uchar4(255, 0, 0, 0);
 	colorHost.yellow =	make_uchar4(255, 255, 0, 0);
 	colorHost.white	=	make_uchar4(255, 255, 255, 0);
+	colorHost.black =	make_uchar4(0, 0, 0, 0);
 	cudaMemcpyToSymbol(colorConfigs, &colorHost, sizeof(agentColor));
 }
 void errorHandler(GWorld *world_h)

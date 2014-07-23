@@ -19,8 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{55286131-E6A8-4EEF-9294-81EC9904363B}</ProjectGuid>
-    <RootNamespace>Predation</RootNamespace>
+    <ProjectGuid>{A794D728-7865-4BE7-9658-F7BD802B2599}</ProjectGuid>
+    <RootNamespace>GameOfLife</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -161,18 +161,16 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Source.cpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="..\gsim\gsimcore.cuh" />
     <ClInclude Include="..\gsim\gsimlib_header.cuh" />
     <ClInclude Include="..\gsim\gsimvisual.cuh" />
     <ClInclude Include="Boid.cuh" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="config16384Agent.txt" />
-    <Text Include="config4096Agent.txt" />
-    <Text Include="config8192Agent.txt" />
+    <Text Include="config.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

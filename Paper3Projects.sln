@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GameOfLife", "GameOfLife\Ga
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SocialForce", "SocialForce\SocialForce.vcxproj", "{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Flocking", "Flocking\Flocking.vcxproj", "{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -39,6 +41,14 @@ Global
 		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|Win32.Build.0 = Release|Win32
 		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|x64.ActiveCfg = Release|x64
 		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|x64.Build.0 = Release|x64
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Debug|Win32.ActiveCfg = Debug|Win32
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Debug|Win32.Build.0 = Debug|Win32
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Debug|x64.ActiveCfg = Debug|x64
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Debug|x64.Build.0 = Debug|x64
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|Win32.ActiveCfg = Release|Win32
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|Win32.Build.0 = Release|Win32
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|x64.ActiveCfg = Release|x64
+		{701BC35B-EA91-46E1-BA02-CEF88EA4BBC7}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

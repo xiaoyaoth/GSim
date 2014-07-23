@@ -27,6 +27,7 @@ struct agentColor
 	uchar4 red;
 	uchar4 yellow;
 	uchar4 white;
+	uchar4 black;
 };
 
 struct modelConstants

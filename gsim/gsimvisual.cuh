@@ -20,7 +20,7 @@ public:
 	GWorld *world;
 	int width;
 	int height;
-	int scale;
+	int dotScale; // actual width = width * dotScale
 
 	PFNGLBINDBUFFERARBPROC    glBindBuffer;
 	PFNGLDELETEBUFFERSARBPROC glDeleteBuffers;
@@ -31,7 +31,7 @@ public:
 		if (VISUALIZE == true) {
 			this->width = 256;
 			this->height = 256;
-			this->scale = 2;
+			this->dotScale = 2;
 			glBindBuffer     = NULL;
 			glDeleteBuffers  = NULL;
 			glGenBuffers     = NULL;
@@ -41,7 +41,7 @@ public:
 			char *dummy = " ";
 			glutInit( &c, &dummy );
 			glutInitDisplayMode( GLUT_DOUBLE | GLUT_RGBA );
-			glutInitWindowSize( this->width * this->scale, this->height * this->scale );
+			glutInitWindowSize( this->width * this->dotScale, this->height * this->dotScale );
 			glutCreateWindow( "bitmap" );
 
 			glBindBuffer    = (PFNGLBINDBUFFERARBPROC)GET_PROC_ADDRESS("glBindBuffer");
@@ -50,7 +50,7 @@ public:
 			glBufferData    = (PFNGLBUFFERDATAARBPROC)GET_PROC_ADDRESS("glBufferData");
 			glGenBuffers( 1, &bufferObj );
 			glBindBuffer( GL_PIXEL_UNPACK_BUFFER_ARB, bufferObj );
-			glBufferData( GL_PIXEL_UNPACK_BUFFER_ARB, scale * scale * width * height * sizeof(uchar4),
+			glBufferData( GL_PIXEL_UNPACK_BUFFER_ARB, dotScale * dotScale * width * height * sizeof(uchar4),
 				NULL, GL_DYNAMIC_DRAW_ARB );
 			cudaGraphicsGLRegisterBuffer(&resource, bufferObj, cudaGraphicsMapFlagsNone);
 			getLastCudaError("cudaGraphicsGLRegisterBuffer");
@@ -93,12 +93,12 @@ public:
 
 		glEnable(GL_TEXTURE_2D);
 		int gSize = GRID_SIZE(modelHostParams.AGENT_NO);
-		visUtil::paint<<<gSize, BLOCK_SIZE>>>(devPtr, vis.world, vis.width, vis.height, vis.scale);
+		visUtil::paint<<<gSize, BLOCK_SIZE>>>(devPtr, vis.world, vis.width, vis.height, vis.dotScale);
 
 		cudaGraphicsUnmapResources(1, &vis.resource, NULL);
 		getLastCudaError("cudaGraphicsUnmapResources");
 
-		glDrawPixels(vis.width * vis.scale, vis.height * vis.scale, GL_RGBA,GL_UNSIGNED_BYTE, 0 );
+		glDrawPixels(vis.width * vis.dotScale, vis.height * vis.dotScale, GL_RGBA,GL_UNSIGNED_BYTE, 0 );
 
 
 		glutSwapBuffers();
@@ -112,35 +112,48 @@ public:
 	}
 
 	void setWorld(GWorld *world){
-		if (VISUALIZE == true)
+#ifdef _WIN32
+		if (VISUALIZE == true) {
 			GSimVisual::getInstance().world = world;
+		}
+#endif
 	}
 
 	void animate(){
+#ifdef _WIN32
 		if (VISUALIZE == true)
 			glutMainLoopEvent();
+#endif
 	}
 
 	void stop(){
+#ifdef _WIN32
 		if (VISUALIZE == true)
 			glutLeaveMainLoop();
+#endif
 	}
 };
 
-__global__ void visUtil::paint(uchar4 *devPtr, const GWorld *world, int width, int height, int scale)
+__global__ void visUtil::paint(uchar4 *devPtr, const GWorld *world, int width, int height, int dotScale)
 {
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < modelDevParams.AGENT_NO){
 		GAgent *ag = world->allAgents[idx];
 		FLOATn myLoc = ag->data->loc;
-		int canvasX = (int)(myLoc.x * width / world->width);
-		int canvasY = (int)(myLoc.y * height / world->height);
-		for (int i = 0; i < scale; i++)
-			for (int j = 0; j < scale; j++) 
+		int canvasX = (int)(myLoc.x * width / world->width) * dotScale;
+		int canvasY = (int)(myLoc.y * height / world->height) * dotScale;
+		int dotDimX = width * dotScale / world->width;
+		int dotDimY = height * dotScale / world->height;
+
+		if (dotDimX < 2) dotDimX = 2;
+		if (dotDimY < 2) dotDimY = 2;
+
+		for (int j = 0; j < dotDimY-1; j++)
+			for (int i = 0; i < dotDimX-1; i++) 
 			{
-				int canvasXNew = canvasX * scale + j;
-				int canvasYNew = canvasY * scale + i;
-				int canvasIdx = canvasYNew * width * scale + canvasXNew;
+				int canvasXNew = canvasX + i;
+				int canvasYNew = canvasY + j;
+				int canvasIdx = canvasYNew * width * dotScale + canvasXNew;
 				devPtr[canvasIdx] = ag->color;
 			}
 	}

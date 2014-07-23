@@ -72,6 +72,7 @@ namespace agentPoolUtil{
 			bool del = pDev->delMark[idx];
 			Agent *o = pDev->agentPtrArray[idx];
 			if (del == false) {
+				o->swapDataAndCopy();
 				hash[idx] = o->locHash();
 			}
 		}
@@ -329,7 +330,7 @@ public:
 		bool poolModifiedLocal = this->modified;
 		this->modified = false;
 		
-		if (poolModifiedLocal && this->numElem > 0) {
+		//if (poolModifiedLocal && this->numElem > 0) {
 			int gSize = GRID_SIZE(this->numElemMax);
 			agentPoolUtil::cleanupDevice<<<gSize, BLOCK_SIZE>>>(pDev);
 			agentPoolUtil::genHash<<<gSize, BLOCK_SIZE>>>(pDev, hash);
@@ -351,7 +352,7 @@ public:
 
 			this->numElem = this->numElemMax - thrust::reduce(thrustDelMark, thrustDelMark + this->numElemMax);
 			cudaMemcpy(pDev, this, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyHostToDevice);
-		}
+		//}
 
 		return poolModifiedLocal; 
 	}
@@ -379,7 +380,7 @@ public:
 	{
 		int gSize = GRID_SIZE(numElem);
 		agentPoolUtil::stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray, model);
-		agentPoolUtil::swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray);
+		//agentPoolUtil::swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray);
 		return numElem;
 	}
 };

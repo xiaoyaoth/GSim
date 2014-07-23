@@ -10,7 +10,6 @@ class GWorld;
 class GScheduler;
 class GModel;
 class GRandom;
-class GWorldDiscrete;
 template<class Agent, class AgentData> class AgentPool;
 
 typedef struct iter_info_per_thread
@@ -53,8 +52,7 @@ namespace agentPoolUtil{
 	}
 	/*kernel func: numElem = numElem + incCount - decCount; no need to be called*/
 	template<class Agent, class AgentData> 
-	__global__ void cleanupDevice(
-		AgentPool<Agent, AgentData> *pDev)//if return true, change agent number accordingly
+	__global__ void cleanupDevice(AgentPool<Agent, AgentData> *pDev)
 	{
 		int idx = threadIdx.x + blockIdx.x * blockDim.x;
 		if (idx < pDev->numElemMax) {
@@ -66,48 +64,37 @@ namespace agentPoolUtil{
 				pDev->agentPtrArray[idx] = NULL;
 			}
 		}
-		if (idx == 0) {
-			pDev->numElem = pDev->numElem + pDev->incCount - pDev->decCount;
-			pDev->incCount = 0;
-			pDev->decCount = 0;
-			pDev->modified = false;
+	}
+	template<class Agent, class AgentData> 
+	__global__ void genHash(AgentPool<Agent, AgentData> *pDev, int *hash) {
+		int idx = threadIdx.x + blockIdx.x * blockDim.x;
+		if (idx < pDev->numElemMax) {
+			bool del = pDev->delMark[idx];
+			Agent *o = pDev->agentPtrArray[idx];
+			if (del == false) {
+				o->swapDataAndCopy();
+				hash[idx] = o->locHash();
+			}
 		}
 	}
-	/*host func: sort idxArray based on delMark*/
-	typedef thrust::device_ptr<void*> tdp_voidStar;
-	typedef thrust::device_ptr<int> tdp_int;
-	template<class Agent, class AgentData>
-	__host__ bool cleanup(
-		AgentPool<Agent, AgentData> *pHost, 
-		AgentPool<Agent, AgentData> *pDev)
+	template<class Agent>
+	__global__ void stepKernel(int numElem, Agent **agentPtrArray, GModel *model)
 	{
-		/*sorting idxArray alone is not enough because the ptrArray will be copied to world->allAgents*/
-		//int *idxArrayLocal = pHost->idxArray;
-		cudaMemcpy(pHost, pDev, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyDeviceToHost);
-		pHost->numElem += (pHost->incCount - pHost->decCount);
-		pHost->incCount = 0;
-		pHost->decCount = 0;
-		bool poolModifiedLocal = pHost->modified;
-		pHost->modified = false;
-
-		if (poolModifiedLocal && pHost->numElem > 0) {
-			int *dataIdxArrayLocal = pHost->dataIdxArray;
-			int *delMarkLocal = pHost->delMark;
-			void **agentPtrArrayLocal = (void**) pHost->agentPtrArray;
-
-			tdp_int thrustDelMark = thrust::device_pointer_cast(delMarkLocal);
-			tdp_voidStar thrustAgentPtrArray = thrust::device_pointer_cast(agentPtrArrayLocal);
-			tdp_int thrustDataIdxArray = thrust::device_pointer_cast(dataIdxArrayLocal);
-
-			thrust::tuple<tdp_voidStar, tdp_int> val = thrust::make_tuple(thrustAgentPtrArray, thrustDataIdxArray);
-			thrust::zip_iterator<thrust::tuple<tdp_voidStar, tdp_int>> valFirst = thrust::make_zip_iterator(val);
-			thrust::sort_by_key(thrustDelMark, thrustDelMark + pHost->numElemMax, valFirst, thrust::less<int>());
-
-			int gSize = GRID_SIZE(pHost->numElemMax);
-			cleanupDevice<<<gSize, BLOCK_SIZE>>>(pDev);
+		int idx = threadIdx.x + blockIdx.x * blockDim.x; 
+		if (idx < numElem) {
+			Agent *ag = agentPtrArray[idx];
+			ag->ptrInPool = idx;
+			ag->step(model);
 		}
-
-		return poolModifiedLocal; 
+	}
+	template<class Agent>
+	__global__ void swapKernel(int numElem, Agent **agentPtrArray)
+	{
+		int idx = threadIdx.x + blockIdx.x * blockDim.x;
+		if (idx < numElem) {
+			Agent *ag = agentPtrArray[idx];
+			ag->swapDataAndCopy(); // swapDataAndCopy should be inside a different kernel?
+		}
 	}
 };
 
@@ -115,27 +102,32 @@ __global__ void generateHash(int *hash, GAgent **agentPtrArray, FLOATn *pos, int
 __global__ void generateCellIdx(int *hash, GWorld *c2d, int numAgent);
 void sortHash(int *hash, GAgent **ptrArray, int numAgent);
 
-//GAgent Definition
+typedef struct GAgentData{
+	FLOATn loc;
+	GAgent *agentPtr;
+} GAgentData_t;
+
 class GAgent 
 {
-protected:
+public:
 	GAgentData_t *data;
 	GAgentData_t *dataCopy;
 public:
-	__device__ GAgentData_t *getData();
-	__device__ FLOATn getLoc() const;
-	__device__ void swapDataAndCopy();
-	__device__ virtual void step(GModel *model) = 0;
-	__device__ virtual ~GAgent() {}
-	__device__ virtual void setDataInSmem(void *elem) = 0;
-	int time;
-	int rank;
+	__device__ void swapDataAndCopy(){
+		GAgentData_t *temp = this->data;
+		this->data = this->dataCopy;
+		this->dataCopy = temp;
+	}
+	__device__ int locHash() {
+		FLOATn myLoc = this->data->loc;
+		int xhash = (int)(myLoc.x/modelDevParams.CLEN_X);
+		int yhash = (int)(myLoc.y/modelDevParams.CLEN_Y);
+		return util::zcode(xhash, yhash);
+	}
 	int ptrInPool;
-	void *dataInSmem;
 	uchar4 color;
 };
 
-//GWorld Definition
 class GWorld
 {
 public:
@@ -152,7 +144,6 @@ public:
 	__host__ GWorld(float w, float h){
 		this->width = w;
 		this->height = h;
-		size_t sizeAgArray = modelHostParams.MAX_AGENT_NO*sizeof(int);
 		size_t sizeCellArray = modelHostParams.CELL_NO*sizeof(int);
 
 		cudaMalloc((void**)&this->allAgents, modelHostParams.MAX_AGENT_NO*sizeof(GAgent*));
@@ -192,10 +183,10 @@ public:
 #endif
 private:
 	__device__ bool iterContinue(iterInfo &info) const;
+	template<class dataUnion> __device__ void setSMem(iterInfo &info) const;
 	__device__ void calcPtrAndBoarder(iterInfo &info) const;
 };
 
-//GScheduler Definition
 class GScheduler
 {
 public:
@@ -205,7 +196,6 @@ public:
 	}
 };
 
-//GModel Definition
 class GModel
 {
 public:
@@ -264,8 +254,6 @@ __global__ void initRandom(GRandom *random, int nElemMax)
 	}
 }
 
-__global__ void stepKernel(int numElem, int numStepped, GModel *model);
-__global__ void swapKernel(int numElem, int numStepped, GModel *model);
 template<class Agent, class AgentData> class AgentPool
 {
 	cudaStream_t poolStream;
@@ -273,34 +261,25 @@ public:
 	size_t shareDataSize;
 	/* objects to be deleted will be marked as delete */
 	int *delMark;
-
 	/* pointer array, elements are pointers points to elements in data array
 	Since pointers are light weighted, it will be manipulated in sorting, etc. */
 	int *dataIdxArray;
-
 	/* check if elements are inserted or deleted from pool*/
 	bool modified;
-
 	unsigned int numElem;
 	unsigned int numElemMax;
 	unsigned int incCount;
 	unsigned int decCount;
-
 	/* keeping the actual Agents */
 	Agent **agentPtrArray;
-
+	/* Agent array*/
+	Agent *agentArray;
 	/* ptrArray to agent data*/
 	AgentData *dataArray;
-
 	/* ptrArray to agent data copy*/
 	AgentData *dataCopyArray;
 
 	//Pool implementation
-	//__device__ int add(Agent *o)
-	//{
-	//	int idx = atomicInc(&incCount, numElemMax-numElem) + numElem;
-	//	return this->add(o, idx);
-	//}
 	__device__ int agentSlot()
 	{
 		return atomicInc(&incCount, numElemMax-numElem) + numElem;
@@ -321,6 +300,7 @@ public:
 		bool del = atomicCAS(&this->delMark[agentSlot], false, true);
 		if (del == false) 
 			atomicInc(&decCount, numElem);
+		
 		this->modified = true;
 	}
 	__host__ void alloc(int nElem, int nElemMax){
@@ -331,6 +311,7 @@ public:
 		this->decCount = 0;
 		this->modified = false;
 		cudaMalloc((void**)&this->delMark, nElemMax * sizeof(int));
+		cudaMalloc((void**)&this->agentArray, nElemMax * sizeof(Agent));
 		cudaMalloc((void**)&this->agentPtrArray, nElemMax * sizeof(Agent*));
 		cudaMalloc((void**)&this->dataArray, nElemMax * sizeof(AgentData));
 		cudaMalloc((void**)&this->dataCopyArray, nElemMax * sizeof(AgentData));
@@ -339,20 +320,48 @@ public:
 		cudaMemset(this->dataIdxArray, 0x00, nElemMax * sizeof(int));
 		cudaMemset(this->delMark, 1, nElemMax * sizeof(int));
 	}
-	__host__ void registerPool(
-		GWorld *worldHost, 
-		GScheduler *schedulerHost,
-		AgentPool<Agent, AgentData> *pDev)
+	__host__ bool cleanup(AgentPool<Agent, AgentData> *pDev)
 	{
-		agentPoolUtil::cleanup(this, pDev);
+		typedef thrust::device_ptr<void*> tdp_voidStar;
+		typedef thrust::device_ptr<int> tdp_int;
+		cudaMemcpy(this, pDev, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyDeviceToHost);
+		this->incCount = 0;
+		this->decCount = 0;
+		bool poolModifiedLocal = this->modified;
+		this->modified = false;
+		
+		//if (poolModifiedLocal && this->numElem > 0) {
+			int gSize = GRID_SIZE(this->numElemMax);
+			agentPoolUtil::cleanupDevice<<<gSize, BLOCK_SIZE>>>(pDev);
+			agentPoolUtil::genHash<<<gSize, BLOCK_SIZE>>>(pDev, hash);
+
+			int *dataIdxArrayLocal = this->dataIdxArray;
+			int *delMarkLocal = this->delMark;
+			void **agentPtrArrayLocal = (void**)this->agentPtrArray;
+
+			tdp_int thrustDelMark = thrust::device_pointer_cast(delMarkLocal);
+			tdp_voidStar thrustAgentPtrArray = thrust::device_pointer_cast(agentPtrArrayLocal);
+			tdp_int thrustDataIdxArray = thrust::device_pointer_cast(dataIdxArrayLocal);
+			tdp_int thrustHash = thrust::device_pointer_cast(hash);
+
+			thrust::tuple<tdp_voidStar, tdp_int> val = thrust::make_tuple(thrustAgentPtrArray, thrustDataIdxArray);
+			thrust::tuple<tdp_int, tdp_int> key = thrust::make_tuple(thrustDelMark, thrustHash);
+			thrust::zip_iterator<thrust::tuple<tdp_voidStar, tdp_int>> valFirst = thrust::make_zip_iterator(val);
+			thrust::zip_iterator<thrust::tuple<tdp_int, tdp_int>> keyFirst = thrust::make_zip_iterator(key);
+			thrust::sort_by_key(keyFirst, keyFirst + this->numElemMax, valFirst);
+
+			this->numElem = this->numElemMax - thrust::reduce(thrustDelMark, thrustDelMark + this->numElemMax);
+			cudaMemcpy(pDev, this, sizeof(AgentPool<Agent, AgentData>), cudaMemcpyHostToDevice);
+		//}
+
+		return poolModifiedLocal; 
+	}
+	__host__ void registerPool(GWorld *worldHost, GScheduler *schedulerHost, AgentPool<Agent, AgentData> *pDev)
+	{
+		cleanup(pDev);
 		if (numElem > 0) {
 			Agent **worldPtrArray = (Agent**)worldHost->allAgents;
-			Agent **schPtrArray = (Agent**)schedulerHost->agentPtrArray;
 			cudaMemcpy(worldPtrArray + modelHostParams.AGENT_NO, agentPtrArray, numElem * sizeof(Agent*), cudaMemcpyDeviceToDevice);
-			cudaMemcpy(schPtrArray + modelHostParams.AGENT_NO, agentPtrArray, numElem * sizeof(Agent*), cudaMemcpyDeviceToDevice);
-			int gSize = GRID_SIZE(numElem);
-			generateHash<<<gSize, BLOCK_SIZE>>>(hash, (GAgent**)schPtrArray + modelHostParams.AGENT_NO, pos, numElem);
-			sortHash(hash, (GAgent**)schPtrArray + modelHostParams.AGENT_NO, numElem);
 		}
 		getLastCudaError("registerPool");
 		modelHostParams.AGENT_NO += numElem;
@@ -370,42 +379,11 @@ public:
 	__host__ int stepPoolAgent(GModel *model, int numStepped)
 	{
 		int gSize = GRID_SIZE(numElem);
-		stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, numStepped, model);
-		swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, numStepped, model);
-		//stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize>>>(numElem, numStepped, model);
+		agentPoolUtil::stepKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray, model);
+		//agentPoolUtil::swapKernel<<<gSize, BLOCK_SIZE, this->shareDataSize, poolStream>>>(numElem, this->agentPtrArray);
 		return numElem;
 	}
 };
-__global__ void stepKernel(int numElem, int numStepped, GModel *model)
-{
-	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	if (idx < numElem) {
-		GAgent *ag = model->scheduler->agentPtrArray[idx + numStepped];
-		ag->ptrInPool = idx;
-		ag->step(model);
-	}
-}
-__global__ void swapKernel(int numElem, int numStepped, GModel *model)
-{
-	int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	if (idx < numElem) {
-		GAgent *ag = model->scheduler->agentPtrArray[idx + numStepped];
-		ag->swapDataAndCopy(); // swapDataAndCopy should be inside a different kernel?
-	}
-}
-
-//GAgent
-__device__ GAgentData_t *GAgent::getData(){
-	return this->data;
-}
-__device__ FLOATn GAgent::getLoc() const{
-	return this->data->loc;
-}
-__device__ void GAgent::swapDataAndCopy() {
-	GAgentData_t *temp = this->data;
-	this->data = this->dataCopy;
-	this->dataCopy = temp;
-}
 
 //GWorld
 __device__ GAgent* GWorld::obtainAgent(int idx) const {
@@ -489,8 +467,6 @@ __device__ int sharedMax(volatile int* data, int tid, int idx, float loc, float 
 __device__ void GWorld::neighborQueryInit(const FLOATn &agLoc, float range, iterInfo &info) const {
 	unsigned int tid = threadIdx.x;
 	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	unsigned int wid = tid >> 5;
-	unsigned int lane = tid & 31;
 
 	info.ptrInWorld = -1;
 	info.boarder = -1;
@@ -544,25 +520,14 @@ __device__ void GWorld::calcPtrAndBoarder(iterInfo &info) const {
 }
 template<class dataUnion> __device__ dataUnion *GWorld::nextAgentDataFromSharedMem(iterInfo &info) const {
 	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
-	//dataUnion *unionArray = (dataUnion*)smem;
+
 	const int tid = threadIdx.x;
 	const int lane = tid & 31;
 
 	if (!iterContinue(info))
 		return NULL;
 
-	if (info.ptrInSmem == 32)
-		info.ptrInSmem = 0;
-
-	if (info.ptrInSmem == 0) {
-		dataUnion &elem = unionArray[tid];
-		int agPtr = info.ptrInWorld + lane;
-		if (agPtr < info.boarder && agPtr >=0) {
-			GAgent *ag = this->obtainAgent(agPtr);
-			ag->setDataInSmem(&elem);
-			//*(dataUnion*)&elem = *(dataUnion*)ag->getData();
-		} 
-	}
+	setSMem<dataUnion>(info);
 
 	dataUnion *elem = &unionArray[tid - lane + info.ptrInSmem];
 	info.ptrInSmem++;
@@ -577,31 +542,14 @@ __device__ GAgentData_t *GWorld::nextAgentData(iterInfo &info) const
 
 	GAgent *ag = this->obtainAgent(info.ptrInWorld);
 	info.ptrInWorld++;
-	return ag->getData();
+	return ag->data;
 }
 template<class dataUnion> __device__ GAgent *GWorld::nextAgent(iterInfo &info) const
 {
-	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
-
 	if (!iterContinue(info))
 		return NULL;
 
-	int tid = threadIdx.x;
-	int lane = tid & 31;
-
-	if (info.ptrInSmem == 32)
-		info.ptrInSmem = 0;
-
-	if (info.ptrInSmem == 0) {
-		dataUnion &elem = unionArray[tid];
-		int agPtr = info.ptrInWorld + lane;
-		if (agPtr < info.boarder && agPtr >=0) {
-			GAgent *ag = this->obtainAgent(agPtr);
-			ag->setDataInSmem(&elem);
-			//*(dataUnion*)&elem = *(dataUnion*)ag->getData();
-			ag->dataInSmem = &elem;
-		} 
-	}
+	setSMem<dataUnion>(info);
 
 	GAgent *ag = this->obtainAgent(info.ptrInWorld);
 	info.ptrInWorld++;
@@ -629,6 +577,25 @@ __device__ bool GWorld::iterContinue(iterInfo &info) const
 		this->calcPtrAndBoarder(info);
 	}
 	return true;
+}
+template<class dataUnion> __device__ void GWorld::setSMem(iterInfo &info) const
+{
+	dataUnion *unionArray = (dataUnion*)&smem[blockDim.x];
+
+	int tid = threadIdx.x;
+	int lane = tid & 31;
+
+	if (info.ptrInSmem == 32)
+		info.ptrInSmem = 0;
+
+	if (info.ptrInSmem == 0) {
+		dataUnion &elem = unionArray[tid];
+		int agPtr = info.ptrInWorld + lane;
+		if (agPtr < info.boarder && agPtr >=0) {
+			GAgent *ag = this->obtainAgent(agPtr);
+			elem.putDataInSmem(ag);
+		} 
+	}
 }
 #ifdef GWORLD_3D
 __device__ float GWorld::stz(const float z) const{
@@ -658,18 +625,10 @@ __global__ void generateHash(int *hash, GAgent **agentPtrArray, FLOATn *pos, int
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < numAgent) {
 		GAgent *ag = agentPtrArray[idx];
-		FLOATn myLoc = ag->getLoc();
+		hash[idx] = ag->locHash();
+		FLOATn myLoc = ag->data->loc;
 		pos[idx] = myLoc;
-		int xhash = (int)(myLoc.x/modelDevParams.CLEN_X);
-		int yhash = (int)(myLoc.y/modelDevParams.CLEN_Y);
-#ifdef GWORLD_3D
-		int zhash = (int)(myLoc.z)/CLEN_Z;
-		hash[idx] = util::zcode(xhash, yhash, zhash);
-#else
-		hash[idx] = util::zcode(xhash, yhash);
-#endif
 	}
-	//printf("id: %d, hash: %d, neiIdx: %d\n", idx, hash[idx], c2d->neighborIdx[idx]);
 }
 __global__ void generateCellIdx(int *hash, GWorld *c2d, int numAgent)
 {
@@ -765,7 +724,7 @@ __global__ void step(GModel *gm){
 		GAgent *ag;
 		if (world != NULL) {
 			ag = world->allAgents[idx];
-			ag->step(gm);
+			//ag->step(gm);
 			ag->swapDataAndCopy();
 		}
 	}
@@ -906,7 +865,7 @@ void errorHandler(GWorld *world_h)
 	char *outfname = new char[30];
 	sprintf(outfname, "out_genNeighbor_neighborIdx.txt");
 	fout.open(outfname, std::ios::out);
-	for (int i = 0; i < modelHostParams.AGENT_NO; i++){
+	for (unsigned int i = 0; i < modelHostParams.AGENT_NO; i++){
 		fout 
 			<< hash_h[i] << " " 
 			<< pos_h[i].x << " " 
@@ -952,13 +911,9 @@ void doLoop(GModel *mHost){
 		modelHostParams.AGENT_NO = 0;
 
 		mHost->preStep();
-		int gSize = GRID_SIZE(modelHostParams.AGENT_NO);
 		util::genNeighbor(mHost->world, mHost->worldHost, modelHostParams.AGENT_NO);
 
-		//step<<<gSize, BLOCK_SIZE, sizeOfSmem>>>(mHost->model);
 		mHost->step();
-		//if(cudaSuccess != cudaGetLastError())
-		//	errorHandler(mHost);
 
 		cudaDeviceSynchronize();
 		cudaEventRecord(stop, 0);

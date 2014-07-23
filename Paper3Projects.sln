@@ -5,6 +5,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Predation", "Predation\Pred
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GameOfLife", "GameOfLife\GameOfLife.vcxproj", "{A794D728-7865-4BE7-9658-F7BD802B2599}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SocialForce", "SocialForce\SocialForce.vcxproj", "{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -29,6 +31,14 @@ Global
 		{A794D728-7865-4BE7-9658-F7BD802B2599}.Release|Win32.Build.0 = Release|Win32
 		{A794D728-7865-4BE7-9658-F7BD802B2599}.Release|x64.ActiveCfg = Release|x64
 		{A794D728-7865-4BE7-9658-F7BD802B2599}.Release|x64.Build.0 = Release|x64
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Debug|Win32.Build.0 = Debug|Win32
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Debug|x64.ActiveCfg = Debug|x64
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Debug|x64.Build.0 = Debug|x64
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|Win32.ActiveCfg = Release|Win32
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|Win32.Build.0 = Release|Win32
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|x64.ActiveCfg = Release|x64
+		{6C3B88B2-6E30-4E65-811C-EB371A3A5ED6}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

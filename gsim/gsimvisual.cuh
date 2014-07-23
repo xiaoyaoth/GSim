@@ -2,8 +2,8 @@
 #define GSIMVISUAL_H
 
 #include "gsimlib_header.cuh"
-#include "common\book.h"
-#include "common\gl_helper.h"
+#include "book.h"
+#include "gl_helper.h"
 #include "cuda_gl_interop.h"
 #include "gsimcore.cuh"
 
@@ -139,7 +139,7 @@ __global__ void visUtil::paint(uchar4 *devPtr, const GWorld *world, int width, i
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
 	if (idx < modelDevParams.AGENT_NO){
 		GAgent *ag = world->allAgents[idx];
-		FLOATn myLoc = ag->getLoc();
+		FLOATn myLoc = ag->data->loc;
 		int canvasX = (int)(myLoc.x * width / world->width) * dotScale;
 		int canvasY = (int)(myLoc.y * height / world->height) * dotScale;
 		int dotDimX = width * dotScale / world->width;

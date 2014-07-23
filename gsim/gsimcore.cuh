@@ -136,7 +136,6 @@ public:
 	__host__ GWorld(float w, float h){
 		this->width = w;
 		this->height = h;
-		size_t sizeAgArray = modelHostParams.MAX_AGENT_NO*sizeof(int);
 		size_t sizeCellArray = modelHostParams.CELL_NO*sizeof(int);
 
 		cudaMalloc((void**)&this->allAgents, modelHostParams.MAX_AGENT_NO*sizeof(GAgent*));
@@ -353,10 +352,7 @@ public:
 		cleanup(pDev);
 		if (numElem > 0) {
 			Agent **worldPtrArray = (Agent**)worldHost->allAgents;
-			Agent **schPtrArray = (Agent**)schedulerHost->agentPtrArray;
 			cudaMemcpy(worldPtrArray + modelHostParams.AGENT_NO, agentPtrArray, numElem * sizeof(Agent*), cudaMemcpyDeviceToDevice);
-			cudaMemcpy(schPtrArray + modelHostParams.AGENT_NO, agentPtrArray, numElem * sizeof(Agent*), cudaMemcpyDeviceToDevice);
-			int gSize = GRID_SIZE(numElem);
 		}
 		getLastCudaError("registerPool");
 		modelHostParams.AGENT_NO += numElem;
@@ -463,8 +459,6 @@ __device__ int sharedMax(volatile int* data, int tid, int idx, float loc, float 
 __device__ void GWorld::neighborQueryInit(const FLOATn &agLoc, float range, iterInfo &info) const {
 	unsigned int tid = threadIdx.x;
 	unsigned int idx = threadIdx.x + blockIdx.x * blockDim.x;
-	unsigned int wid = tid >> 5;
-	unsigned int lane = tid & 31;
 
 	info.ptrInWorld = -1;
 	info.boarder = -1;
@@ -873,7 +867,7 @@ void errorHandler(GWorld *world_h)
 	char *outfname = new char[30];
 	sprintf(outfname, "out_genNeighbor_neighborIdx.txt");
 	fout.open(outfname, std::ios::out);
-	for (int i = 0; i < modelHostParams.AGENT_NO; i++){
+	for (unsigned int i = 0; i < modelHostParams.AGENT_NO; i++){
 		fout 
 			<< hash_h[i] << " " 
 			<< pos_h[i].x << " " 
@@ -919,13 +913,9 @@ void doLoop(GModel *mHost){
 		modelHostParams.AGENT_NO = 0;
 
 		mHost->preStep();
-		int gSize = GRID_SIZE(modelHostParams.AGENT_NO);
 		util::genNeighbor(mHost->world, mHost->worldHost, modelHostParams.AGENT_NO);
 
-		//step<<<gSize, BLOCK_SIZE, sizeOfSmem>>>(mHost->model);
 		mHost->step();
-		//if(cudaSuccess != cudaGetLastError())
-		//	errorHandler(mHost);
 
 		cudaDeviceSynchronize();
 		cudaEventRecord(stop, 0);

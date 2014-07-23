@@ -284,7 +284,6 @@ public:
 			repelVec = myData.loc-obstacle;
 			repelVec /= length(repelVec);
 			if (d != 0) {
-				float scale = 1.0 / d;
 				float mag = length(repelVec);
 				if (mag != 0 ) repelVec *= maxForce * 7 / mag ;
 				if (length(repelVec) < 0)

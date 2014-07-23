@@ -14,7 +14,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/functional.h>
 #include <thrust/transform.h>
-#include "helper_math.h"
+#include "inc/helper_math.h"
 
 #define FLOATn float2
 #define INTn int2

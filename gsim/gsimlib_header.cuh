@@ -14,7 +14,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/functional.h>
 #include <thrust/transform.h>
-#include "inc/helper_math.h"
+#include "helper_math.h"
 
 #define FLOATn float2
 #define INTn int2
@@ -27,6 +27,7 @@ struct agentColor
 	uchar4 red;
 	uchar4 yellow;
 	uchar4 white;
+	uchar4 black;
 };
 
 struct modelConstants
@@ -54,6 +55,10 @@ int STEPS;			//read from config
 bool VISUALIZE;		//read from config
 int BLOCK_SIZE;		//read from config
 #define GRID_SIZE(n) (n%BLOCK_SIZE==0 ? n/BLOCK_SIZE : n/BLOCK_SIZE + 1)
+
+typedef struct GAgentData{
+	FLOATn loc;
+} GAgentData_t;
 
 namespace SCHEDULE_CONSTANT{
 	static const float EPOCH = 0.0;
